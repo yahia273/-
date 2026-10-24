@@ -1,0 +1,483 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Hardened Primitives ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidTimestampOnCreate(data) {
+      return data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidTimestampOnUpdate(data) {
+      return data.createdAt is timestamp &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // Verified Admin check: Exclusively granted to verified Google Sign-In account yahiakhamisasd@gmail.com
+    function isAdmin() {
+      return isSignedIn() &&
+             'email' in request.auth.token &&
+             'email_verified' in request.auth.token &&
+             request.auth.token.email_verified == true &&
+             request.auth.token.email is string &&
+             request.auth.token.email.lower() == 'yahiakhamisasd@gmail.com';
+    }
+
+    function isValidActivityType(val) {
+      return val is string && val in ['RESTAURANT', 'SUPERMARKET', 'CAFE'];
+    }
+
+    // --- Validation Blueprints ---
+
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.name is string && data.name.size() >= 2 && data.name.size() <= 100 &&
+             data.phone is string && data.phone.size() <= 25 &&
+             data.email is string && data.email.size() >= 3 && data.email.size() <= 150 &&
+             data.role is string && data.role in ['customer', 'vendor'] &&
+             (!('isApproved' in data) || data.isApproved is bool) &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidAdminDoc(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.adminEmail is string && data.adminEmail.size() >= 5 && data.adminEmail.size() <= 150 &&
+             data.adminEmail.lower() == 'yahiakhamisasd@gmail.com' &&
+             data.role is string && data.role == 'admin' &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidVendorStore(data) {
+      return data.vendorId is string && data.vendorId.size() >= 1 && data.vendorId.size() <= 128 &&
+             (!('ownerName' in data) || (data.ownerName is string && data.ownerName.size() >= 2 && data.ownerName.size() <= 100)) &&
+             data.storeName is string && data.storeName.size() >= 2 && data.storeName.size() <= 100 &&
+             isValidActivityType(data.activityType) &&
+             data.phone is string && data.phone.size() >= 5 && data.phone.size() <= 25 &&
+             data.email is string && data.email.size() >= 3 && data.email.size() <= 150 &&
+             data.isApproved is bool &&
+             data.isSuspended is bool &&
+             data.suspensionReason is string && data.suspensionReason.size() <= 300 &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidOffer(data) {
+      return data.vendorId is string && data.vendorId.size() >= 1 && data.vendorId.size() <= 128 &&
+             data.storeName is string && data.storeName.size() >= 2 && data.storeName.size() <= 100 &&
+             isValidActivityType(data.activityType) &&
+             data.title is string && data.title.size() >= 2 && data.title.size() <= 150 &&
+             data.description is string && data.description.size() <= 1000 &&
+             data.originalPrice is number && data.originalPrice > 0 && data.originalPrice <= 1000000 &&
+             data.offerPrice is number && data.offerPrice > 0 && data.offerPrice <= data.originalPrice &&
+             data.stockQuantity is int && data.stockQuantity >= 0 && data.stockQuantity <= 100000 &&
+             data.isActive is bool &&
+             data.isVendorSuspended is bool &&
+             data.isAvailableForCustomers is bool &&
+             data.isAvailableForCustomers == (data.isActive == true && data.isVendorSuspended == false && data.stockQuantity > 0) &&
+             data.imageBase64 is string && data.imageBase64.size() <= 450000 &&
+             isValidActivityType(data.defaultImageKey) &&
+             (!('lastOrderRefId' in data) || (data.lastOrderRefId is string && data.lastOrderRefId.size() <= 128)) &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidOrder(data) {
+      return isValidId(data.offerId) &&
+             data.offerTitle is string && data.offerTitle.size() >= 2 && data.offerTitle.size() <= 150 &&
+             isValidId(data.vendorId) &&
+             data.storeName is string && data.storeName.size() >= 2 && data.storeName.size() <= 100 &&
+             isValidActivityType(data.activityType) &&
+             isValidId(data.customerId) &&
+             data.customerName is string && data.customerName.size() >= 2 && data.customerName.size() <= 100 &&
+             data.customerPhone is string && data.customerPhone.size() >= 5 && data.customerPhone.size() <= 25 &&
+             data.deliveryAddress is string && data.deliveryAddress.size() >= 3 && data.deliveryAddress.size() <= 300 &&
+             data.notes is string && data.notes.size() <= 300 &&
+             data.quantity is int && data.quantity >= 1 && data.quantity <= 1000 &&
+             data.unitOfferPrice is number && data.unitOfferPrice > 0 && data.unitOfferPrice <= 1000000 &&
+             data.totalPrice is number && data.totalPrice > 0 && data.totalPrice <= 100000000 &&
+             data.commissionAmount is number && data.commissionAmount >= 0 && data.commissionAmount <= data.totalPrice &&
+             data.status is string && data.status in ['PENDING', 'ACCEPTED', 'DELIVERED', 'CANCELLED'] &&
+             data.cancellationReason is string && data.cancellationReason.size() <= 300 &&
+             ((data.status == 'CANCELLED' && data.cancellationReason.size() >= 2) ||
+              (data.status != 'CANCELLED' && data.cancellationReason.size() == 0)) &&
+             data.dateKey is string && data.dateKey.size() == 10 && data.dateKey.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidNotification(data) {
+      return data.recipientUid is string && data.recipientUid.size() >= 1 && data.recipientUid.size() <= 128 &&
+             data.targetChannel is string && data.targetChannel in ['VENDOR', 'ADMIN', 'CUSTOMER'] &&
+             isValidId(data.senderUid) &&
+             data.type is string && data.type in [
+               'NEW_ORDER',
+               'ORDER_STATUS',
+               'ORDER_CANCELLED',
+               'SUSPICIOUS_CANCELLATIONS',
+               'VENDOR_APPROVAL_REQUEST',
+               'VENDOR_APPROVED',
+               'VENDOR_REJECTED'
+             ] &&
+             data.title is string && data.title.size() >= 2 && data.title.size() <= 200 &&
+             data.body is string && data.body.size() >= 2 && data.body.size() <= 600 &&
+             data.orderId is string && data.orderId.size() <= 128 &&
+             data.vendorId is string && data.vendorId.size() <= 128 &&
+             data.storeName is string && data.storeName.size() <= 100 &&
+             data.customerName is string && data.customerName.size() <= 100 &&
+             data.customerPhone is string && data.customerPhone.size() <= 25 &&
+             data.isRead is bool &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidPlatformConfig(data) {
+      return data.dailyCancelAlertLimit is int && data.dailyCancelAlertLimit >= 1 && data.dailyCancelAlertLimit <= 50 &&
+             data.commissionRatePercent is int && data.commissionRatePercent == 10 &&
+             isValidId(data.updatedBy) &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidSettlement(data) {
+      return isValidId(data.vendorId) &&
+             data.storeName is string && data.storeName.size() >= 2 && data.storeName.size() <= 100 &&
+             data.amountCollected is number && data.amountCollected > 0 && data.amountCollected <= 100000000 &&
+             isValidId(data.recordedBy) &&
+             data.note is string && data.note.size() <= 200 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // --- Collection Rules ---
+
+    // 1. User Profiles (PII Isolated to Owner & Admin; Vendors cannot self-approve)
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'name', 'phone', 'email', 'role', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'name', 'phone', 'email', 'role', 'isApproved', 'createdAt', 'updatedAt']) &&
+                       (incoming().role != 'vendor' || (!('isApproved' in incoming()) || incoming().isApproved == false)) &&
+                       isValidTimestampOnCreate(incoming()) &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming()) &&
+                       isValidTimestampOnUpdate(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().email == existing().email &&
+                       incoming().createdAt == existing().createdAt && (
+                         (request.auth.uid == userId &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'role', 'isApproved', 'updatedAt']) &&
+                          (incoming().role != 'vendor' ||
+                           !('isApproved' in incoming()) ||
+                           incoming().isApproved == false ||
+                           (existing().role == 'vendor' && 'isApproved' in existing() && existing().isApproved == true))) ||
+                         isAdmin()
+                       );
+
+      allow delete: if false;
+    }
+
+    // 2. Verified Admin Sessions (Locked exclusively to verified yahiakhamisasd@gmail.com)
+    match /admins/{adminId} {
+      allow get: if isAdmin() && isValidId(adminId) && request.auth.uid == adminId;
+      allow list: if false;
+
+      allow create: if isAdmin() &&
+                       isValidId(adminId) &&
+                       request.auth.uid == adminId &&
+                       incoming().keys().hasAll(['userId', 'adminEmail', 'role', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'adminEmail', 'role', 'createdAt', 'updatedAt']) &&
+                       isValidTimestampOnCreate(incoming()) &&
+                       isValidAdminDoc(incoming());
+
+      allow update: if isAdmin() &&
+                       isValidId(adminId) &&
+                       request.auth.uid == adminId &&
+                       isValidAdminDoc(incoming()) &&
+                       isValidTimestampOnUpdate(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().adminEmail == existing().adminEmail &&
+                       incoming().role == existing().role &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['updatedAt']);
+
+      allow delete: if isAdmin() && isValidId(adminId) && request.auth.uid == adminId;
+    }
+
+    // 3. Vendor Stores (isApproved starts false on create; Only Admin can approve, reject/delete, or suspend)
+    match /vendors/{vendorId} {
+      allow get: if isSignedIn() && isValidId(vendorId) && (request.auth.uid == vendorId || isAdmin());
+      allow list: if isAdmin();
+
+      allow create: if isSignedIn() &&
+                       isValidId(vendorId) &&
+                       request.auth.uid == vendorId &&
+                       incoming().vendorId == request.auth.uid &&
+                       incoming().isApproved == false &&
+                       incoming().isSuspended == false &&
+                       incoming().suspensionReason == '' &&
+                       incoming().keys().hasAll(['vendorId', 'ownerName', 'storeName', 'activityType', 'phone', 'email', 'isApproved', 'isSuspended', 'suspensionReason', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['vendorId', 'ownerName', 'storeName', 'activityType', 'phone', 'email', 'isApproved', 'isSuspended', 'suspensionReason', 'createdAt', 'updatedAt']) &&
+                       isValidTimestampOnCreate(incoming()) &&
+                       isValidVendorStore(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(vendorId) &&
+                       isValidVendorStore(incoming()) &&
+                       isValidTimestampOnUpdate(incoming()) &&
+                       incoming().vendorId == existing().vendorId &&
+                       incoming().email == existing().email &&
+                       incoming().createdAt == existing().createdAt && (
+                         // Action 1: Vendor updates store details (cannot change isApproved or suspension fields)
+                         (request.auth.uid == vendorId &&
+                          incoming().isApproved == existing().isApproved &&
+                          incoming().isSuspended == existing().isSuspended &&
+                          incoming().suspensionReason == existing().suspensionReason &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['ownerName', 'storeName', 'activityType', 'phone', 'updatedAt'])) ||
+                         // Action 2: Admin approves vendor or suspends/unsuspends vendor account
+                         (isAdmin() &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['isApproved', 'isSuspended', 'suspensionReason', 'updatedAt']))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(vendorId) && isAdmin();
+    }
+
+    // 4. Offers (Persistent Quantity-Based Marketplace System; strictly requires isApproved == true)
+    match /offers/{offerId} {
+      allow get: if isSignedIn() && isValidId(offerId) && (
+        existing().isAvailableForCustomers == true ||
+        existing().vendorId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow list: if isSignedIn() && (
+        existing().isAvailableForCustomers == true ||
+        existing().vendorId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow create: if isSignedIn() &&
+                       isValidId(offerId) &&
+                       incoming().vendorId == request.auth.uid &&
+                       incoming().isVendorSuspended == false &&
+                       incoming().keys().hasAll(['vendorId', 'storeName', 'activityType', 'title', 'description', 'originalPrice', 'offerPrice', 'stockQuantity', 'isActive', 'isVendorSuspended', 'isAvailableForCustomers', 'imageBase64', 'defaultImageKey', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['vendorId', 'storeName', 'activityType', 'title', 'description', 'originalPrice', 'offerPrice', 'stockQuantity', 'isActive', 'isVendorSuspended', 'isAvailableForCustomers', 'imageBase64', 'defaultImageKey', 'lastOrderRefId', 'createdAt', 'updatedAt']) &&
+                       isValidTimestampOnCreate(incoming()) &&
+                       isValidOffer(incoming()) &&
+                       exists(/databases/$(database)/documents/vendors/$(request.auth.uid)) &&
+                       get(/databases/$(database)/documents/vendors/$(request.auth.uid)).data.isApproved == true &&
+                       get(/databases/$(database)/documents/vendors/$(request.auth.uid)).data.isSuspended == false;
+
+      allow update: if isSignedIn() &&
+                       isValidId(offerId) &&
+                       isValidOffer(incoming()) &&
+                       isValidTimestampOnUpdate(incoming()) &&
+                       incoming().vendorId == existing().vendorId &&
+                       incoming().createdAt == existing().createdAt && (
+                         // Action 1: Approved vendor edits offer or restores stock upon cancellation
+                         (request.auth.uid == existing().vendorId &&
+                          incoming().isVendorSuspended == existing().isVendorSuspended &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'originalPrice', 'offerPrice', 'stockQuantity', 'isActive', 'isAvailableForCustomers', 'imageBase64', 'defaultImageKey', 'storeName', 'activityType', 'updatedAt']) &&
+                          exists(/databases/$(database)/documents/vendors/$(request.auth.uid)) &&
+                          get(/databases/$(database)/documents/vendors/$(request.auth.uid)).data.isApproved == true) ||
+                         // Action 2: Customer atomically decrements stock when creating a valid order
+                         (existing().isAvailableForCustomers == true &&
+                          incoming().isVendorSuspended == existing().isVendorSuspended &&
+                          incoming().isActive == existing().isActive &&
+                          incoming().stockQuantity >= 0 &&
+                          incoming().stockQuantity < existing().stockQuantity &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['stockQuantity', 'isAvailableForCustomers', 'lastOrderRefId', 'updatedAt']) &&
+                          'lastOrderRefId' in incoming() &&
+                          isValidId(incoming().lastOrderRefId) &&
+                          !exists(/databases/$(database)/documents/orders/$(incoming().lastOrderRefId)) &&
+                          existsAfter(/databases/$(database)/documents/orders/$(incoming().lastOrderRefId)) &&
+                          getAfter(/databases/$(database)/documents/orders/$(incoming().lastOrderRefId)).data.customerId == request.auth.uid &&
+                          getAfter(/databases/$(database)/documents/orders/$(incoming().lastOrderRefId)).data.offerId == offerId &&
+                          getAfter(/databases/$(database)/documents/orders/$(incoming().lastOrderRefId)).data.quantity == (existing().stockQuantity - incoming().stockQuantity)) ||
+                         // Action 3: Admin suspends/unsuspends vendor offers
+                         isAdmin()
+                       );
+
+      allow delete: if isSignedIn() && isValidId(offerId) && (existing().vendorId == request.auth.uid || isAdmin());
+    }
+
+    // 5. Orders (Live Orders, Terminal State Locking & Cancellation Tracking)
+    match /orders/{orderId} {
+      allow get: if isSignedIn() && isValidId(orderId) && (
+        existing().customerId == request.auth.uid ||
+        existing().vendorId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow list: if isSignedIn() && (
+        existing().customerId == request.auth.uid ||
+        existing().vendorId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow create: if isSignedIn() &&
+                       isValidId(orderId) &&
+                       incoming().customerId == request.auth.uid &&
+                       incoming().status == 'PENDING' &&
+                       incoming().cancellationReason == '' &&
+                       incoming().keys().hasAll(['offerId', 'offerTitle', 'vendorId', 'storeName', 'activityType', 'customerId', 'customerName', 'customerPhone', 'deliveryAddress', 'notes', 'quantity', 'unitOfferPrice', 'totalPrice', 'commissionAmount', 'status', 'cancellationReason', 'dateKey', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['offerId', 'offerTitle', 'vendorId', 'storeName', 'activityType', 'customerId', 'customerName', 'customerPhone', 'deliveryAddress', 'notes', 'quantity', 'unitOfferPrice', 'totalPrice', 'commissionAmount', 'status', 'cancellationReason', 'dateKey', 'createdAt', 'updatedAt']) &&
+                       isValidTimestampOnCreate(incoming()) &&
+                       isValidOrder(incoming()) &&
+                       exists(/databases/$(database)/documents/offers/$(incoming().offerId));
+
+      allow update: if isSignedIn() &&
+                       isValidId(orderId) &&
+                       isValidOrder(incoming()) &&
+                       isValidTimestampOnUpdate(incoming()) &&
+                       incoming().offerId == existing().offerId &&
+                       incoming().vendorId == existing().vendorId &&
+                       incoming().customerId == existing().customerId &&
+                       incoming().quantity == existing().quantity &&
+                       incoming().totalPrice == existing().totalPrice &&
+                       incoming().commissionAmount == existing().commissionAmount &&
+                       incoming().dateKey == existing().dateKey &&
+                       incoming().createdAt == existing().createdAt && (
+                         // Terminal State Lock: Once DELIVERED or CANCELLED, non-admins cannot mutate
+                         (request.auth.uid == existing().vendorId &&
+                          !(existing().status in ['DELIVERED', 'CANCELLED']) && (
+                            // Action 1: Accept Order
+                            (existing().status == 'PENDING' &&
+                             incoming().status == 'ACCEPTED' &&
+                             incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])) ||
+                            // Action 2: Mark Delivered
+                            (existing().status in ['PENDING', 'ACCEPTED'] &&
+                             incoming().status == 'DELIVERED' &&
+                             incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])) ||
+                            // Action 3: Cancel Order with mandatory reason
+                            (existing().status in ['PENDING', 'ACCEPTED'] &&
+                             incoming().status == 'CANCELLED' &&
+                             incoming().cancellationReason.size() >= 2 &&
+                             incoming().diff(existing()).affectedKeys().hasOnly(['status', 'cancellationReason', 'updatedAt']))
+                          )) ||
+                         // Action 4: Admin override
+                         isAdmin()
+                       );
+
+      allow delete: if false;
+    }
+
+    // 6. Notifications (Dual Real-Time Dispatch to Vendor & Admin + Customer Updates)
+    match /notifications/{notificationId} {
+      allow get: if isSignedIn() && isValidId(notificationId) && (
+        existing().recipientUid == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow list: if isSignedIn() && (
+        existing().recipientUid == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow create: if isSignedIn() &&
+                       isValidId(notificationId) &&
+                       incoming().senderUid == request.auth.uid &&
+                       incoming().isRead == false &&
+                       incoming().keys().hasAll(['recipientUid', 'targetChannel', 'senderUid', 'type', 'title', 'body', 'orderId', 'vendorId', 'storeName', 'customerName', 'customerPhone', 'isRead', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['recipientUid', 'targetChannel', 'senderUid', 'type', 'title', 'body', 'orderId', 'vendorId', 'storeName', 'customerName', 'customerPhone', 'isRead', 'createdAt', 'updatedAt']) &&
+                       isValidTimestampOnCreate(incoming()) &&
+                       isValidNotification(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(notificationId) &&
+                       isValidNotification(incoming()) &&
+                       isValidTimestampOnUpdate(incoming()) &&
+                       incoming().senderUid == existing().senderUid &&
+                       incoming().recipientUid == existing().recipientUid &&
+                       incoming().createdAt == existing().createdAt && (
+                         (existing().recipientUid == request.auth.uid &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['isRead', 'updatedAt'])) ||
+                         (isAdmin() &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['isRead', 'updatedAt']))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(notificationId) && isAdmin();
+    }
+
+    // 7. Platform Config (/platform_config/settings)
+    match /platform_config/{configId} {
+      allow get: if isSignedIn() && configId == 'settings';
+      allow list: if false;
+
+      allow create: if isSignedIn() &&
+                       configId == 'settings' &&
+                       incoming().updatedBy == request.auth.uid &&
+                       incoming().keys().hasAll(['dailyCancelAlertLimit', 'commissionRatePercent', 'updatedBy', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['dailyCancelAlertLimit', 'commissionRatePercent', 'updatedBy', 'createdAt', 'updatedAt']) &&
+                       isValidTimestampOnCreate(incoming()) &&
+                       isValidPlatformConfig(incoming()) &&
+                       isAdmin();
+
+      allow update: if isSignedIn() &&
+                       configId == 'settings' &&
+                       isValidPlatformConfig(incoming()) &&
+                       isValidTimestampOnUpdate(incoming()) &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedBy == request.auth.uid &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['dailyCancelAlertLimit', 'updatedBy', 'updatedAt']) &&
+                       isAdmin();
+
+      allow delete: if false;
+    }
+
+    // 8. Commission Cash Settlements Ledger
+    match /commission_settlements/{settlementId} {
+      allow get: if isSignedIn() && isValidId(settlementId) && (
+        existing().vendorId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow list: if isSignedIn() && (
+        existing().vendorId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow create: if isSignedIn() &&
+                       isValidId(settlementId) &&
+                       incoming().recordedBy == request.auth.uid &&
+                       incoming().keys().hasAll(['vendorId', 'storeName', 'amountCollected', 'recordedBy', 'note', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['vendorId', 'storeName', 'amountCollected', 'recordedBy', 'note', 'createdAt', 'updatedAt']) &&
+                       isValidSettlement(incoming()) &&
+                       isAdmin();
+
+      allow update, delete: if false;
+    }
+  }
+}

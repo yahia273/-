@@ -1,0 +1,6 @@
+{
+  "name": "عروض القرية",
+  "description": "منصة عروض محلات ومطاعم وسوبر ماركت القرية للزبائن مع نظام طلبات وإشعارات حية ولوحة تحكم الإدارة ومراقبة العمولة.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

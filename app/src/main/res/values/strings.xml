@@ -1,0 +1,30 @@
+<resources>
+    <string name="app_name">عروض القرية</string>
+    <string name="welcome_subtitle">منصة محلات ومطاعم وسوبر ماركت القرية في مكان واحد</string>
+    <string name="role_customer_title">أنا عميل / زبون</string>
+    <string name="role_customer_desc">تصفح أحدث عروض مطاعم وسوبر ماركت ومقاهي القرية واطلب التوصيل لباب بيتك</string>
+    <string name="role_vendor_title">أنا صاحب محل / تجاري</string>
+    <string name="role_vendor_desc">أضف عروض محلك بالكمية المتاحة واستقبل طلبات الزبائن بإشعارات فورية</string>
+    <string name="admin_portal_entry">بوابة تحكم الإدارة</string>
+    <string name="sign_in_with_google">المتابعة عبر حساب Google</string>
+    <string name="sign_out">تسجيل الخروج</string>
+    <string name="switch_role">تبديل الحساب</string>
+    <string name="order_offer_now">اطلب العرض الآن</string>
+    <string name="confirm_order">تأكيد الطلب وإرسال الإشعار</string>
+    <string name="add_new_offer">إضافة عرض جديد</string>
+    <string name="accept_order">قبول الطلب</string>
+    <string name="mark_delivered">تم التوصيل</string>
+    <string name="cancel_order">إلغاء الطلب</string>
+    <string name="suspend_vendor">تعليق حساب المحل</string>
+    <string name="unsuspend_vendor">إعادة تفعيل المحل</string>
+    <string name="record_cash_collection">تسجيل تحصيل كاش</string>
+    <string name="currency_egp">ج.م</string>
+    <string name="vendor_pending_title">طلب تفعيل المحل قيد المراجعة</string>
+    <string name="vendor_pending_message">تم استلام طلب تسجيل محلك بنجاح! للحفاظ على جودة الخدمة، يتطلب تفعيل الحساب التواصل مع إدارة التطبيق لتأكيد البيانات.</string>
+    <string name="admin_support_phone">01556841974</string>
+    <string name="contact_admin_whatsapp">التواصل عبر الواتساب: 01556841974</string>
+    <string name="contact_admin_call">الاتصال بإدارة التطبيق: 01556841974</string>
+    <string name="pending_vendor_requests_title">طلبات التفعيل المعلقة</string>
+    <string name="approve_vendor_account">تفعيل الحساب</string>
+    <string name="reject_vendor_request">رفض الطلب</string>
+</resources>

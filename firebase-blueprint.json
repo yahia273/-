@@ -1,0 +1,187 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user account and marketplace role (customer or vendor) with vendor approval status.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID matching document ID." },
+        "name": { "type": "string", "description": "Full name of customer or vendor owner." },
+        "phone": { "type": "string", "description": "Contact phone number." },
+        "email": { "type": "string", "format": "email", "description": "Authenticated Google email." },
+        "role": { "type": "string", "enum": ["customer", "vendor"], "description": "Marketplace account role." },
+        "isApproved": { "type": "boolean", "description": "Manual admin approval state for vendor accounts (false on vendor registration until approved by Admin)." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." }
+      },
+      "required": ["userId", "name", "phone", "email", "role", "createdAt", "updatedAt"]
+    },
+    "AdminSession": {
+      "title": "AdminSession",
+      "description": "Verified administrator record unlocked exclusively by Google Sign-In as yahiakhamisasd@gmail.com.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID matching document ID." },
+        "adminEmail": { "type": "string", "format": "email", "description": "Verified admin Google email (yahiakhamisasd@gmail.com)." },
+        "role": { "type": "string", "enum": ["admin"], "description": "Verified admin role." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." }
+      },
+      "required": ["userId", "adminEmail", "role", "createdAt", "updatedAt"]
+    },
+    "VendorStore": {
+      "title": "VendorStore",
+      "description": "Commercial village store profile with manual Admin approval gate (isApproved) and suspension state.",
+      "type": "object",
+      "properties": {
+        "vendorId": { "type": "string", "description": "Owner Firebase Auth UID matching document ID." },
+        "ownerName": { "type": "string", "description": "Full name of the store owner." },
+        "storeName": { "type": "string", "description": "Display name of the village store." },
+        "activityType": { "type": "string", "enum": ["RESTAURANT", "SUPERMARKET", "CAFE"], "description": "Store business category." },
+        "phone": { "type": "string", "description": "Store contact phone number." },
+        "email": { "type": "string", "format": "email", "description": "Vendor email." },
+        "isApproved": { "type": "boolean", "description": "Starts false on vendor registration; set to true exclusively by Admin." },
+        "isSuspended": { "type": "boolean", "description": "Whether Admin has suspended this vendor." },
+        "suspensionReason": { "type": "string", "description": "Admin reason for account suspension." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." }
+      },
+      "required": ["vendorId", "ownerName", "storeName", "activityType", "phone", "email", "isApproved", "isSuspended", "suspensionReason", "createdAt", "updatedAt"]
+    },
+    "Offer": {
+      "title": "Offer",
+      "description": "Quantity-based persistent marketplace offer (no time-based auto-deletion).",
+      "type": "object",
+      "properties": {
+        "vendorId": { "type": "string", "description": "Vendor UID who owns the offer." },
+        "storeName": { "type": "string", "description": "Denormalized store name." },
+        "activityType": { "type": "string", "enum": ["RESTAURANT", "SUPERMARKET", "CAFE"], "description": "Store business category." },
+        "title": { "type": "string", "description": "Offer title." },
+        "description": { "type": "string", "description": "Offer details." },
+        "originalPrice": { "type": "number", "description": "Original price in EGP." },
+        "offerPrice": { "type": "number", "description": "Discounted offer price in EGP." },
+        "stockQuantity": { "type": "integer", "description": "Available quantity; hides automatically when 0." },
+        "isActive": { "type": "boolean", "description": "Manual active/paused state set by vendor." },
+        "isVendorSuspended": { "type": "boolean", "description": "Denormalized suspension flag from vendor store." },
+        "isAvailableForCustomers": { "type": "boolean", "description": "Computed visibility flag: isActive && !isVendorSuspended && stockQuantity > 0." },
+        "imageBase64": { "type": "string", "description": "Optional compressed Base64 gallery image." },
+        "defaultImageKey": { "type": "string", "enum": ["RESTAURANT", "SUPERMARKET", "CAFE"], "description": "Fallback activity illustration key." },
+        "lastOrderRefId": { "type": "string", "description": "Optional atomic order reference ID for stock decrement validation." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." }
+      },
+      "required": ["vendorId", "storeName", "activityType", "title", "description", "originalPrice", "offerPrice", "stockQuantity", "isActive", "isVendorSuspended", "isAvailableForCustomers", "imageBase64", "defaultImageKey", "createdAt", "updatedAt"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer delivery order with live status, cancellation reason tracking, and 10% commission calculation.",
+      "type": "object",
+      "properties": {
+        "offerId": { "type": "string", "description": "Ordered offer ID." },
+        "offerTitle": { "type": "string", "description": "Snapshot of offer title." },
+        "vendorId": { "type": "string", "description": "Target store vendor UID." },
+        "storeName": { "type": "string", "description": "Target store name." },
+        "activityType": { "type": "string", "enum": ["RESTAURANT", "SUPERMARKET", "CAFE"], "description": "Store business category." },
+        "customerId": { "type": "string", "description": "Ordering customer UID." },
+        "customerName": { "type": "string", "description": "Customer delivery recipient name." },
+        "customerPhone": { "type": "string", "description": "Customer phone number." },
+        "deliveryAddress": { "type": "string", "description": "Detailed village delivery address." },
+        "notes": { "type": "string", "description": "Optional delivery instructions." },
+        "quantity": { "type": "integer", "description": "Units ordered." },
+        "unitOfferPrice": { "type": "number", "description": "Unit offer price in EGP." },
+        "totalPrice": { "type": "number", "description": "Total order price in EGP." },
+        "commissionAmount": { "type": "number", "description": "10% platform commission in EGP." },
+        "status": { "type": "string", "enum": ["PENDING", "ACCEPTED", "DELIVERED", "CANCELLED"], "description": "Order lifecycle state." },
+        "cancellationReason": { "type": "string", "description": "Mandatory reason when cancelled by vendor." },
+        "dateKey": { "type": "string", "description": "YYYY-MM-DD local date key for daily cancellation tracking." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." }
+      },
+      "required": ["offerId", "offerTitle", "vendorId", "storeName", "activityType", "customerId", "customerName", "customerPhone", "deliveryAddress", "notes", "quantity", "unitOfferPrice", "totalPrice", "commissionAmount", "status", "cancellationReason", "dateKey", "createdAt", "updatedAt"]
+    },
+    "AppNotification": {
+      "title": "AppNotification",
+      "description": "Real-time dual notification dispatched simultaneously to Vendor and Admin, plus approval & suspicious cancellation alerts.",
+      "type": "object",
+      "properties": {
+        "recipientUid": { "type": "string", "description": "Target user UID or ADMIN_BROADCAST." },
+        "targetChannel": { "type": "string", "enum": ["VENDOR", "ADMIN", "CUSTOMER"], "description": "Dashboard notification channel." },
+        "senderUid": { "type": "string", "description": "Authenticated user UID who triggered the event." },
+        "type": { "type": "string", "enum": ["NEW_ORDER", "ORDER_STATUS", "ORDER_CANCELLED", "SUSPICIOUS_CANCELLATIONS", "VENDOR_APPROVAL_REQUEST", "VENDOR_APPROVED", "VENDOR_REJECTED"], "description": "Notification event type." },
+        "title": { "type": "string", "description": "Notification headline." },
+        "body": { "type": "string", "description": "Notification message details." },
+        "orderId": { "type": "string", "description": "Related order ID." },
+        "vendorId": { "type": "string", "description": "Related vendor UID." },
+        "storeName": { "type": "string", "description": "Related store name." },
+        "customerName": { "type": "string", "description": "Customer name for order context." },
+        "customerPhone": { "type": "string", "description": "Customer phone for order context." },
+        "isRead": { "type": "boolean", "description": "Whether recipient marked notification as read." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." }
+      },
+      "required": ["recipientUid", "targetChannel", "senderUid", "type", "title", "body", "orderId", "vendorId", "storeName", "customerName", "customerPhone", "isRead", "createdAt", "updatedAt"]
+    },
+    "PlatformConfig": {
+      "title": "PlatformConfig",
+      "description": "Global platform configuration managed by Admin (daily cancellation threshold and 10% commission rate).",
+      "type": "object",
+      "properties": {
+        "dailyCancelAlertLimit": { "type": "integer", "description": "Number of daily cancellations per store that triggers evasion alert." },
+        "commissionRatePercent": { "type": "integer", "description": "Admin cash commission percentage (10%)." },
+        "updatedBy": { "type": "string", "description": "Admin UID who updated settings." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." }
+      },
+      "required": ["dailyCancelAlertLimit", "commissionRatePercent", "updatedBy", "createdAt", "updatedAt"]
+    },
+    "CommissionSettlement": {
+      "title": "CommissionSettlement",
+      "description": "Cash collection settlement entry recorded by Admin for a Vendor store.",
+      "type": "object",
+      "properties": {
+        "vendorId": { "type": "string", "description": "Vendor UID." },
+        "storeName": { "type": "string", "description": "Store display name." },
+        "amountCollected": { "type": "number", "description": "Cash amount collected in EGP." },
+        "recordedBy": { "type": "string", "description": "Admin UID who recorded payment." },
+        "note": { "type": "string", "description": "Optional receipt note." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()." }
+      },
+      "required": ["vendorId", "storeName", "amountCollected", "recordedBy", "note", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User account and role profiles isolated to owner and admin."
+    },
+    "/admins/{adminId}": {
+      "schema": "AdminSession",
+      "description": "Verified administrator session records gated exclusively by Google email yahiakhamisasd@gmail.com."
+    },
+    "/vendors/{vendorId}": {
+      "schema": "VendorStore",
+      "description": "Commercial store profiles with manual Admin approval (isApproved) and suspension flags."
+    },
+    "/offers/{offerId}": {
+      "schema": "Offer",
+      "description": "Persistent village offers filtered by quantity and active status."
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Customer orders shared between customer, target vendor, and admin."
+    },
+    "/notifications/{notificationId}": {
+      "schema": "AppNotification",
+      "description": "Dual real-time order notifications, vendor approval alerts, and suspicious cancellation alerts."
+    },
+    "/platform_config/{configId}": {
+      "schema": "PlatformConfig",
+      "description": "Singleton platform settings document (/platform_config/settings)."
+    },
+    "/commission_settlements/{settlementId}": {
+      "schema": "CommissionSettlement",
+      "description": "Cash commission collection ledger recorded by Admin."
+    }
+  }
+}
